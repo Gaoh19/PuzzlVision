@@ -2,34 +2,51 @@ import operator
 import cv2
 import numpy as np
 
-
 def find_extreme_corners(polygon, limit_fn, compare_fn):
-    # limit_fn is the min or max function
-    # compare_fn is the np.add or np.subtract function
+    """
+    Find the extreme corners of a polygon based on a specified limit function and comparison function.
 
-    # if we are trying to find bottom left corner, we know that it will have the smallest (x - y) value
+    Parameters:
+        polygon (numpy.ndarray): Contour points of a polygon.
+        limit_fn (function): The limit function (min or max).
+        compare_fn (function): The comparison function (np.add or np.subtract).
+
+    Returns:
+        tuple: Coordinates of the extreme corner.
+    """
     section, _ = limit_fn(enumerate([compare_fn(pt[0][0], pt[0][1]) for pt in polygon]),
                           key=operator.itemgetter(1))
-
     return polygon[section][0][0], polygon[section][0][1]
 
-
 def draw_extreme_corners(pts, original):
+    """
+    Draw a circle at the specified extreme corner points on the original image.
+
+    Parameters:
+        pts (tuple): Coordinates of the extreme corner.
+        original (numpy.ndarray): Original image.
+    """
     cv2.circle(original, pts, 7, (0, 255, 0), cv2.FILLED)
 
-
 def clean_helper(img):
-    # print(np.isclose(img, 0).sum())
+    """
+    Clean the image by removing regions with almost entirely white pixels and accidental edge detections.
+
+    Parameters:
+        img (numpy.ndarray): Input image.
+
+    Returns:
+        tuple: Cleaned image and a flag indicating if cleaning was successful.
+    """
     if np.isclose(img, 0).sum() / (img.shape[0] * img.shape[1]) >= 0.95:
         return np.zeros_like(img), False
 
-    # if there is very little white in the region around the center, this means we got an edge accidently
     height, width = img.shape
     mid = width // 2
+
     if np.isclose(img[:, int(mid - width * 0.4):int(mid + width * 0.4)], 0).sum() / (2 * width * 0.4 * height) >= 0.90:
         return np.zeros_like(img), False
 
-    # center image
     contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
     x, y, w, h = cv2.boundingRect(contours[0])
@@ -41,34 +58,47 @@ def clean_helper(img):
 
     return new_img, True
 
-
 def grid_line_helper(img, shape_location, length=10):
+    """
+    Enhance grid lines in the image.
+
+    Parameters:
+        img (numpy.ndarray): Input image.
+        shape_location (int): 0 for vertical lines, 1 for horizontal lines.
+        length (int): Distance between lines.
+
+    Returns:
+        numpy.ndarray: Image with enhanced grid lines.
+    """
     clone = img.copy()
-    # if its horizontal lines then it is shape_location 1, for vertical it is 0
     row_or_col = clone.shape[shape_location]
-    # find out the distance the lines are placed
     size = row_or_col // length
 
-    # find out an appropriate kernel
     if shape_location == 0:
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, size))
     else:
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (size, 1))
 
-    # erode and dilate the lines
     clone = cv2.erode(clone, kernel)
     clone = cv2.dilate(clone, kernel)
 
     return clone
 
-
 def draw_lines(img, lines):
-    # https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_houghlines/py_houghlines.html
+    """
+    Draw lines on the image based on Hough lines detected.
+
+    Parameters:
+        img (numpy.ndarray): Input image.
+        lines (numpy.ndarray): Hough lines.
+
+    Returns:
+        numpy.ndarray: Image with drawn lines.
+    """
     clone = img.copy()
     lines = np.squeeze(lines)
 
     for rho, theta in lines:
-        # find out where the line stretches to and draw them
         a = np.cos(theta)
         b = np.sin(theta)
         x0 = a * rho
@@ -78,4 +108,5 @@ def draw_lines(img, lines):
         x2 = int(x0 - 1000 * (-b))
         y2 = int(y0 - 1000 * a)
         cv2.line(clone, (x1, y1), (x2, y2), (255, 255, 255), 4)
+
     return clone
